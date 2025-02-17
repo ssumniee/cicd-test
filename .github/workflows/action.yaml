@@ -13,7 +13,7 @@ jobs:
     steps:
       - name: 🌍 배포 타겟 확인
         id: deploy_target_check
-        run: echo "DEPLOY_TARGETS='["kr", "en", "jp"]'" >> $GITHUB_OUTPUT
+        run: echo "DEPLOY_TARGETS='[\"kr\", \"en\", \"jp\"]'" >> $GITHUB_OUTPUT
 
   deploy:
     needs: build
