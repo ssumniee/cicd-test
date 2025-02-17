@@ -19,14 +19,10 @@ jobs:
     needs: build
     if: success()
     runs-on: ubuntu-latest
-#    strategy:
-#      matrix:
-#        target: ${{ fromJson(needs.build.outputs.deploy_targets) }}
     steps:
       - name: ✏️ Slack 알림 변수 설정
         run: |
-#          DEPLOY_TARGET_UPPERCASE=$(echo '${{ matrix.target }}' | tr '[:lower:]' '[:upper:]')
-          DEPLOY_TARGET_UPPERCASE=$(echo 'kr' | tr '[:lower:]' '[:upper:]')
+          DEPLOY_TARGET_UPPERCASE=$(echo '"kr"' | tr '[:lower:]' '[:upper:]')
           echo "DEPLOY_TARGET_UPPERCASE=$DEPLOY_TARGET_UPPERCASE" >> $GITHUB_ENV
 
       - name: 🚀 배포 스크립트 실행
