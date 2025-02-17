@@ -1,0 +1,31 @@
+name: 운영 빌드 및 배포
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      deploy_targets: ${{ steps.deploy_target_check.outputs.DEPLOY_TARGETS }}
+    steps:
+      - name: 🌍 배포 타겟 확인
+        id: deploy_target_check
+        run: echo "DEPLOY_TARGETS='["kr", "en", "jp"]'" >> $GITHUB_OUTPUT
+
+  deploy:
+    needs: build
+    if: success()
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: ✏️ Slack 알림 변수 설정
+        run: |
+          DEPLOY_TARGET_UPPERCASE=$(echo '"kr"' | tr '[:lower:]' '[:upper:]')
+          echo "DEPLOY_TARGET_UPPERCASE=$DEPLOY_TARGET_UPPERCASE" >> $GITHUB_ENV
+
+      - name: 🚀 배포 스크립트 실행
+        run: |
+          echo "🚀 Prod ${{ env.TARGET_UPPERCASE }} Deploying..."
