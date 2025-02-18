@@ -1,0 +1,112 @@
+name: 프로덕션 배포 테스트
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_run_id:
+        description: "Build Workflow Run ID"
+        required: true
+        type: string
+
+jobs:
+  download_artifact:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install jq
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq
+
+      - name: Get Test Artifact ID via GitHub API
+        id: get_test_artifact
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OWNER_REPO: ${{ github.repository }}
+          BUILD_RUN_ID: ${{ github.event.inputs.build_run_id }}
+        run: |
+          echo "입력받은 build_run_id: ${BUILD_RUN_ID}"
+          ARTIFACTS_JSON=$(curl -s -H "Authorization: token ${GITHUB_TOKEN}" "https://api.github.com/repos/${OWNER_REPO}/actions/runs/${BUILD_RUN_ID}/artifacts")
+          echo "$ARTIFACTS_JSON" | jq .
+          TEST_ARTIFACT_ID=$(echo "$ARTIFACTS_JSON" | jq -r '.artifacts[] | select(.name=="test-artifact") | .id')
+          if [[ -z "$TEST_ARTIFACT_ID" || "$TEST_ARTIFACT_ID" == "null" ]]; then 
+            echo "Artifact 'test-artifact'를 찾을 수 없습니다. build_run_id를 확인하세요."
+            exit 1
+          fi
+          echo "Test Artifact ID: $TEST_ARTIFACT_ID"
+          echo "::set-output name=test_artifact_id::$TEST_ARTIFACT_ID"
+
+      - name: Get PR Info Artifact ID via GitHub API
+        id: get_pr_info_artifact
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OWNER_REPO: ${{ github.repository }}
+          BUILD_RUN_ID: ${{ github.event.inputs.build_run_id }}
+        run: |
+          ARTIFACTS_JSON=$(curl -s -H "Authorization: token ${GITHUB_TOKEN}" "https://api.github.com/repos/${OWNER_REPO}/actions/runs/${BUILD_RUN_ID}/artifacts")
+          echo "$ARTIFACTS_JSON" | jq .
+          PR_INFO_ARTIFACT_ID=$(echo "$ARTIFACTS_JSON" | jq -r '.artifacts[] | select(.name=="pr-info") | .id')
+          if [[ -z "$PR_INFO_ARTIFACT_ID" || "$PR_INFO_ARTIFACT_ID" == "null" ]]; then 
+            echo "Artifact 'pr-info'를 찾을 수 없습니다. build_run_id를 확인하세요."
+            exit 1
+          fi
+          echo "PR Info Artifact ID: $PR_INFO_ARTIFACT_ID"
+          echo "::set-output name=pr_info_artifact_id::$PR_INFO_ARTIFACT_ID"
+
+      - name: Download Test Artifact as Zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OWNER_REPO: ${{ github.repository }}
+        run: |
+          ARTIFACT_ID=${{ steps.get_test_artifact.outputs.test_artifact_id }}
+          DOWNLOAD_URL="https://api.github.com/repos/${OWNER_REPO}/actions/artifacts/${ARTIFACT_ID}/zip"
+          echo "다운로드 테스트 파일 Artifact URL: $DOWNLOAD_URL"
+          curl -L -H "Authorization: token ${GITHUB_TOKEN}" "$DOWNLOAD_URL" -o downloaded_test_artifact.zip
+          ls -al downloaded_test_artifact.zip
+
+      - name: Download PR Info Artifact as Zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OWNER_REPO: ${{ github.repository }}
+        run: |
+          ARTIFACT_ID=${{ steps.get_pr_info_artifact.outputs.pr_info_artifact_id }}
+          DOWNLOAD_URL="https://api.github.com/repos/${OWNER_REPO}/actions/artifacts/${ARTIFACT_ID}/zip"
+          echo "다운로드 PR Info Artifact URL: $DOWNLOAD_URL"
+          curl -L -H "Authorization: token ${GITHUB_TOKEN}" "$DOWNLOAD_URL" -o downloaded_pr_info_artifact.zip
+          ls -al downloaded_pr_info_artifact.zip
+
+      - name: Unzip Test Artifact
+        run: |
+          mkdir -p test_artifact
+          unzip downloaded_test_artifact.zip -d test_artifact
+          echo "테스트 파일 Artifact 압축 해제 결과:"
+          ls -al test_artifact
+
+      - name: Unzip PR Info Artifact
+        run: |
+          mkdir -p pr_info_artifact
+          unzip downloaded_pr_info_artifact.zip -d pr_info_artifact
+          echo "PR Info Artifact 압축 해제 결과:"
+          ls -al pr_info_artifact
+
+      - name: Log PR Info Fields
+        run: |
+          # pr_info.json 파일이 압축 해제된 폴더 내에 있다고 가정합니다.
+          if [ -f pr_info_artifact/pr_info.json ]; then
+            echo "PR Info JSON 파일 내용:"
+            cat pr_info_artifact/pr_info.json
+            echo "========================"
+            echo "PR Body:"
+            jq -r '.body' pr_info_artifact/pr_info.json
+            echo "------------------------"
+            echo "PR Title:"
+            jq -r '.title' pr_info_artifact/pr_info.json
+            echo "------------------------"
+            echo "PR Base SHA:"
+            jq -r '.base_sha' pr_info_artifact/pr_info.json
+            echo "------------------------"
+            echo "PR Head SHA:"
+            jq -r '.head_sha' pr_info_artifact/pr_info.json
+          else
+            echo "pr_info.json 파일을 찾을 수 없습니다."
+            exit 1
+          fi
