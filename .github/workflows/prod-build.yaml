@@ -1,0 +1,47 @@
+name: 프로덕션 빌드 테스트
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - closed
+
+jobs:
+  upload_artifact:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Create Test File
+        run: |
+          echo "CI/CD 테스트 파일" > test.txt
+          cat test.txt
+
+      - name: Upload Test Artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: test-artifact
+          path: test.txt
+
+      - name: Create PR Info File
+        run: |
+          # PR의 body, title, base.sha, head.sha 값을 pr_info.json에 기록합니다.
+          cat > pr_info.json <<EOF
+          {
+            "body": "${{ github.event.pull_request.body }}",
+            "title": "${{ github.event.pull_request.title }}",
+            "base_sha": "${{ github.event.pull_request.base.sha }}",
+            "head_sha": "${{ github.event.pull_request.head.sha }}"
+          }
+          EOF
+          echo "----- pr_info.json 내용 -----"
+          cat pr_info.json
+
+      - name: Upload PR Info Artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: pr-info
+          path: pr_info.json
